@@ -3,13 +3,13 @@
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
-// @icon            https://raw.githubusercontent.com/ParticleCore/Ebony/gh-pages/images/YTB%2Bicon.png
+// @icon            https://raw.githubusercontent.com/ParticleCore/Ebony/gh-pages/images/YTBV%2Bicon.png
 // @match           *://www.youtube.com/*
 // @exclude         *://www.youtube.com/tv*
 // @exclude         *://www.youtube.com/embed/*
 // @exclude         *://www.youtube.com/live_chat*
 // @run-at          document-start
-// @downloadURL     https://github.com/ParticleCore/Ebony/raw/master/src/Userscript/BlacklistYouTubeVideos.user.js
+// @downloadURL     https://github.com/ParticleCore/Ebony/raw/master/src/Userscript/YouTubeBlacklist.user.js
 // @homepageURL     https://github.com/ParticleCore/Ebony
 // @supportURL      https://github.com/ParticleCore/Ebony/wiki
 // @contributionURL https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=UMVQJJFG4BFHW
@@ -236,7 +236,7 @@
                 holder = document.createElement("link");
                 holder.rel = "stylesheet";
                 holder.type = "text/css";
-                holder.href = "https://particlecore.github.io/Ebony/stylesheets/BlacklistYouTubeVideos.css";
+                holder.href = "https://particlecore.github.io/Ebony/stylesheets/YouTubeBlacklist.css";
                 document.documentElement.appendChild(holder);
             } else if (window.chrome) {
                 holder = document.createElement("style");
