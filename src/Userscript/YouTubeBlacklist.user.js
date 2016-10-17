@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.0.2
+// @version         0.0.3
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -67,7 +67,11 @@
                 // related
                 ".related-list-item," +
                 // material
-                "ytd-grid-video-renderer"
+                "ytd-grid-video-renderer," +
+                "ytd-video-renderer," +         // single video in home feed
+                "ytd-compact-video-renderer," + // watch sidebar videos
+                "ytd-compact-playlist-renderer," +
+                "ytd-compact-radio-renderer"
             );
             i = videos.length;
             while (i--) {
@@ -83,8 +87,14 @@
                         ucid = temp.data.longBylineText || temp.data.shortBylineText;
                         ucid = ucid.runs[0];
                         text = ucid.text;
-                        ucid = ucid.navigationEndpoint.browseEndpoint.browseId;
-                        details[ucid] = text;
+                        if (!ucid.navigationEndpoint) {
+                            ucid = "YouTube";
+                            details[ucid] = ucid;
+                            console.info("YouTube", videos[i]);
+                        } else {
+                            ucid = ucid.navigationEndpoint.browseEndpoint.browseId;
+                            details[ucid] = text;
+                        }
                     } else if (temp.dataset.ytid) {
                         ucid = temp.dataset.ytid;
                         details[ucid] = temp.textContent;
@@ -93,8 +103,8 @@
                     // if no UCID  then channel is YouTube
                     temp = videos[i].querySelector(".attribution");
                     if (temp) {
-                        details.YouTube = "YouTube";
                         ucid = "YouTube";
+                        details[ucid] = ucid;
                     }
                 }
                 if (ucid) {
@@ -141,7 +151,7 @@
                     }
                 }
             }
-            console.log(153, details, ignore.videos.length);
+            //console.log(153, details, ignore.videos.length);
         }
         function loadMore(mutation) {
             var observer, load_more_button;
@@ -160,7 +170,7 @@
         }
         function blacklist(event, observer) {
             var i, temp;
-            console.log(172, event && event.type || observer);
+            //console.log(172, event && event.type || observer);
             if (!window.location.pathname.match(/^\/($|feed\/|watch|results|shared)/)) {
                 return;
             }
@@ -273,6 +283,7 @@
                     cursor: pointer;
                     padding: 11px;
                     position: absolute;
+                    z-index: 1;
                 }
                 body > .bytc-add-to-blacklist {
                     top: -100px;
