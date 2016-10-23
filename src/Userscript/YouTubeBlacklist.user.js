@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.0.4
+// @version         0.0.5
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -43,11 +43,18 @@
             i = container.length;
             while (i--) {
                 if (ignore.containers.indexOf(container[i]) < 0) {
-                    temp = container[i].querySelectorAll(
+                    temp = container[i].querySelector(
                         ".yt-shelf-grid-item," +
-                        "ytd-grid-video-renderer" // material
+                        "ytd-video-renderer," +            // single video in home feed
+                        "ytd-grid-video-renderer," +
+                        "ytd-compact-video-renderer," +    // watch sidebar videos
+                        "ytd-compact-playlist-renderer," +
+                        "ytd-compact-radio-renderer," +
+                        "ytd-playlist-renderer," +         // search playlist
+                        "ytd-channel-renderer," +          // search channel card
+                        "ytd-show-renderer"                // search show card
                     );
-                    if (!temp.length) {
+                    if (!temp) {
                         //console.log(container[i]);
                         container[i].outerHTML = "";
                         //container[i].classList.add("blocked");
@@ -186,7 +193,7 @@
                 "#watch-more-related," +      // related sidebar
                 "#browse-items-primary," +    // subscriptions page
                 "#feed-main-what_to_watch," + // home or trending page
-                "#content"                    // material home
+                "#content"                    // material home || #continuations loading icon
             );
             if (load_more_button && (!loadMore.button || !loadMore.button.contains(load_more_button))) {
                 loadMore.button = load_more_button;
@@ -198,7 +205,8 @@
         function blacklist(event, observer) {
             var i, temp;
             //console.log(172, event && event.type || observer);
-            if (!window.location.pathname.match(/^\/($|feed\/|watch|results|shared)/)) {
+            if (!window.location.pathname.indexOf("/feed/subscriptions") || !window.location.pathname.match(/^\/($|feed\/|watch|results|shared)/)) {
+            //if (!window.location.pathname.match(/^\/($|feed\/?!subscriptions|watch|results|shared)/)) {
                 return;
             }
             if (!ignore || !event || event.type === "spfdone" || event.type === "yt-navigate-finish") {
@@ -207,7 +215,6 @@
                     containers: []
                 };
                 globals = {
-                    new_load: true,
                     hasContainers: /^\/($|feed\/)/.test(window.location.pathname)
                 };
             }
@@ -248,7 +255,6 @@
                     cleanEmptyContainers();
                 }
                 loadMore();
-                globals.new_load = false;
             }
         }
 
