@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.0.5
+// @version         0.0.6
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -23,7 +23,7 @@
         function addToBlacklist(event) {
             event.preventDefault();
             document.body.appendChild(blacklist_button);
-            console.log(this.details);
+            console.log(26, this.details);
             blocked_channels[this.details.ucid] = this.details.brand;
             blacklist();
         }
@@ -45,27 +45,24 @@
                 if (ignore.containers.indexOf(container[i]) < 0) {
                     temp = container[i].querySelector(
                         ".yt-shelf-grid-item," +
-                        "ytd-video-renderer," +            // single video in home feed
                         "ytd-grid-video-renderer," +
                         "ytd-compact-video-renderer," +    // watch sidebar videos
                         "ytd-compact-playlist-renderer," +
                         "ytd-compact-radio-renderer," +
                         "ytd-playlist-renderer," +         // search playlist
                         "ytd-channel-renderer," +          // search channel card
+                        "ytd-video-renderer," +            // single video in home feed or search page
                         "ytd-show-renderer"                // search show card
                     );
                     if (!temp) {
-                        //console.log(container[i]);
                         container[i].outerHTML = "";
-                        //container[i].classList.add("blocked");
                         break;
                     } else {
                         ignore.containers.push(container[i]);
                     }
                 }
             }
-            window.dispatchEvent(new Event("scroll"));
-            console.log(61, ignore.containers.length);
+            console.log(67, ignore.containers.length);
         }
         function getVideos(added_nodes) {
             var i, temp, text, ucid, child, parent, videos, button, remove, details, up_next;
@@ -84,12 +81,13 @@
                 ".related-list-item," +
                 // material
                 "ytd-grid-video-renderer," +
-                "ytd-video-renderer," +            // single video in home feed
                 "ytd-compact-video-renderer," +    // watch sidebar videos
                 "ytd-compact-playlist-renderer," +
                 "ytd-compact-radio-renderer," +
                 "ytd-playlist-renderer," +         // search playlist
                 "ytd-channel-renderer," +          // search channel card
+                "ytd-radio-renderer," +            // search radio card
+                "ytd-video-renderer," +            // single video in home feed or search page
                 "ytd-show-renderer"                // search show card
             );
             i = videos.length;
@@ -170,7 +168,7 @@
                     child = remove[i];
                     while (child) {
                         parent = child.parentNode;
-                        if (parent.childElementCount > 1 || parent.id === "contents") {
+                        if (parent.childElementCount > 1 || parent.id === "contents" || parent.id === "items") {
                             //console.log(blocked_channels[ucid]);
                             child.outerHTML = "";
                             break;
@@ -181,32 +179,37 @@
                 if (globals.hasContainers) {
                     ignore.containers = [];
                     cleanEmptyContainers();
-                } else {
-                    window.dispatchEvent(new Event("scroll"));
                 }
+                console.info("resize");
+                window.dispatchEvent(new Event("resize"));
             }
             //console.log(153, details, ignore.videos.length);
         }
         function loadMore(mutation) {
-            var observer, load_more_button;
+            /*var observer, load_more_button;
             load_more_button = document.querySelector(
                 "#watch-more-related," +      // related sidebar
                 "#browse-items-primary," +    // subscriptions page
                 "#feed-main-what_to_watch," + // home or trending page
                 "#content"                    // material home || #continuations loading icon
+            );*/
+            var load_more_button = document.querySelector(
+                "ytd-search:not([hidden]) #contents #continuations.ytd-item-section-renderer," +  // search page
+                "ytd-browse:not([hidden]) #primary > #continuations.ytd-section-list-renderer," + // home/subscriptions page
+                "ytd-watch:not([hidden]) #continuations.ytd-watch-next-secondary-results-renderer" // watch page
             );
             if (load_more_button && (!loadMore.button || !loadMore.button.contains(load_more_button))) {
                 loadMore.button = load_more_button;
-                observer = new MutationObserver(blacklist);
-                observer.observe(load_more_button, {childList: true, subtree: true});
+                loadMore.observer = new MutationObserver(blacklist);
+                loadMore.observer.observe(load_more_button, {attributes: true});
             }
             console.log(200);
         }
         function blacklist(event, observer) {
             var i, temp;
             //console.log(172, event && event.type || observer);
-            if (!window.location.pathname.indexOf("/feed/subscriptions") || !window.location.pathname.match(/^\/($|feed\/|watch|results|shared)/)) {
-            //if (!window.location.pathname.match(/^\/($|feed\/?!subscriptions|watch|results|shared)/)) {
+            //if (!window.location.pathname.indexOf("/feed/subscriptions") || !window.location.pathname.match(/^\/($|feed\/|watch|results|shared)/)) {
+            if (!/^\/($|feed\/(?!subscriptions)|watch|results|shared)/.test(window.location.pathname)) {
                 return;
             }
             if (!ignore || !event || event.type === "spfdone" || event.type === "yt-navigate-finish") {
@@ -236,25 +239,30 @@
                 document.body.appendChild(blacklist_button);
             }
             if (observer) {
-                i = event.length;
-                //console.log(199, event);
-                while (i--) {
-                    if (event[i].addedNodes.length > 1) {
-                        //console.log(202, event[i].addedNodes.length);
-                        getVideos();
-                        if (globals.hasContainers) {
-                            cleanEmptyContainers();
-                        }
-                    }
+                temp = document.querySelectorAll(
+                    "ytd-search:not([hidden]) #contents #contents.ytd-item-section-renderer > *," +  // search page
+                    "ytd-browse:not([hidden]) #primary > #contents.ytd-section-list-renderer > *," + // home/subscriptions page
+                    "ytd-watch:not([hidden]) #items.ytd-watch-next-secondary-results-renderer > *"   // watch page
+                ).length;
+                console.log("count: " + temp);
+                observer.count = temp;
+                getVideos();
+                if (globals.hasContainers) {
+                    cleanEmptyContainers();
                 }
-            // } else if (!event || event.type === "spfdone" || document.readyState !== "complete") {
             } else {
                 console.log(245);
                 getVideos();
                 if (globals.hasContainers) {
                     cleanEmptyContainers();
                 }
-                loadMore();
+                if (event && !observer) {
+                    if (loadMore.observer) {
+                        loadMore.button = false;
+                        loadMore.observer.disconnect();
+                    }
+                    loadMore();
+                }
             }
         }
 
