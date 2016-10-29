@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.0.6
+// @version         0.0.7
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -43,17 +43,7 @@
             i = container.length;
             while (i--) {
                 if (ignore.containers.indexOf(container[i]) < 0) {
-                    temp = container[i].querySelector(
-                        ".yt-shelf-grid-item," +
-                        "ytd-grid-video-renderer," +
-                        "ytd-compact-video-renderer," +    // watch sidebar videos
-                        "ytd-compact-playlist-renderer," +
-                        "ytd-compact-radio-renderer," +
-                        "ytd-playlist-renderer," +         // search playlist
-                        "ytd-channel-renderer," +          // search channel card
-                        "ytd-video-renderer," +            // single video in home feed or search page
-                        "ytd-show-renderer"                // search show card
-                    );
+                    temp = container[i].querySelector(video_nodes);
                     if (!temp) {
                         container[i].outerHTML = "";
                         break;
@@ -62,6 +52,8 @@
                     }
                 }
             }
+            console.info("resize");
+            window.dispatchEvent(new Event("resize"));
             console.log(67, ignore.containers.length);
         }
         function getVideos(added_nodes) {
@@ -72,24 +64,7 @@
                 ".autoplay-bar," +
                 "ytd-compact-autoplay-renderer" // material
             );
-            videos = document.querySelectorAll(
-                // main, trending, subscription, search
-                ".yt-lockup-video," +
-                ".yt-lockup-channel," +
-                ".yt-lockup-playlist," +
-                // related
-                ".related-list-item," +
-                // material
-                "ytd-grid-video-renderer," +
-                "ytd-compact-video-renderer," +    // watch sidebar videos
-                "ytd-compact-playlist-renderer," +
-                "ytd-compact-radio-renderer," +
-                "ytd-playlist-renderer," +         // search playlist
-                "ytd-channel-renderer," +          // search channel card
-                "ytd-radio-renderer," +            // search radio card
-                "ytd-video-renderer," +            // single video in home feed or search page
-                "ytd-show-renderer"                // search show card
-            );
+            videos = document.querySelectorAll(video_nodes);
             i = videos.length;
             while (i--) {
                 if (ignore.videos.indexOf(videos[i]) < 0) {
@@ -178,10 +153,10 @@
                 }
                 if (globals.hasContainers) {
                     ignore.containers = [];
-                    cleanEmptyContainers();
+                } else {
+                    console.info("resize");
+                    window.dispatchEvent(new Event("resize"));
                 }
-                console.info("resize");
-                window.dispatchEvent(new Event("resize"));
             }
             //console.log(153, details, ignore.videos.length);
         }
@@ -194,21 +169,19 @@
                 "#content"                    // material home || #continuations loading icon
             );*/
             var load_more_button = document.querySelector(
-                "ytd-search:not([hidden]) #contents #continuations.ytd-item-section-renderer," +  // search page
-                "ytd-browse:not([hidden]) #primary > #continuations.ytd-section-list-renderer," + // home/subscriptions page
-                "ytd-watch:not([hidden]) #continuations.ytd-watch-next-secondary-results-renderer" // watch page
+                "ytd-search:not([hidden]) #contents #contents.ytd-item-section-renderer," +  // search page
+                "ytd-browse:not([hidden]) #primary > #contents.ytd-section-list-renderer," + // home/subscriptions page
+                "ytd-watch:not([hidden]) #items.ytd-watch-next-secondary-results-renderer"   // watch page
             );
             if (load_more_button && (!loadMore.button || !loadMore.button.contains(load_more_button))) {
                 loadMore.button = load_more_button;
                 loadMore.observer = new MutationObserver(blacklist);
-                loadMore.observer.observe(load_more_button, {attributes: true});
+                loadMore.observer.observe(load_more_button, {childList: true});
             }
             console.log(200);
         }
         function blacklist(event, observer) {
             var i, temp;
-            //console.log(172, event && event.type || observer);
-            //if (!window.location.pathname.indexOf("/feed/subscriptions") || !window.location.pathname.match(/^\/($|feed\/|watch|results|shared)/)) {
             if (!/^\/($|feed\/(?!subscriptions)|watch|results|shared)/.test(window.location.pathname)) {
                 return;
             }
@@ -239,23 +212,22 @@
                 document.body.appendChild(blacklist_button);
             }
             if (observer) {
-                temp = document.querySelectorAll(
-                    "ytd-search:not([hidden]) #contents #contents.ytd-item-section-renderer > *," +  // search page
-                    "ytd-browse:not([hidden]) #primary > #contents.ytd-section-list-renderer > *," + // home/subscriptions page
-                    "ytd-watch:not([hidden]) #items.ytd-watch-next-secondary-results-renderer > *"   // watch page
-                ).length;
-                console.log("count: " + temp);
-                observer.count = temp;
-                getVideos();
-                if (globals.hasContainers) {
-                    cleanEmptyContainers();
+                i = event.length;
+                while (i--) {
+                    if (event[i].addedNodes.length) {
+                        temp = document.querySelectorAll(
+                            "ytd-search:not([hidden]) #contents #contents.ytd-item-section-renderer > *," +  // search page
+                            "ytd-browse:not([hidden]) #primary > #contents.ytd-section-list-renderer > *," + // home/subscriptions page
+                            "ytd-watch:not([hidden]) #items.ytd-watch-next-secondary-results-renderer > *"   // watch page
+                        ).length;
+                        console.log("count: " + temp);
+                        getVideos();
+                        break;
+                    }
                 }
             } else {
                 console.log(245);
                 getVideos();
-                if (globals.hasContainers) {
-                    cleanEmptyContainers();
-                }
                 if (event && !observer) {
                     if (loadMore.observer) {
                         loadMore.button = false;
@@ -264,10 +236,31 @@
                     loadMore();
                 }
             }
+            if (globals.hasContainers) {
+                cleanEmptyContainers();
+            }
         }
 
 
-        var ignore, globals, blocked_channels, blacklist_button;
+        var ignore, globals, video_nodes, blocked_channels, blacklist_button;
+
+        video_nodes = //
+            // main, trending, subscription, search
+            ".yt-lockup-video," +
+            ".yt-lockup-channel," +
+            ".yt-lockup-playlist," +
+            // related
+            ".related-list-item," +
+            // material
+            "ytd-grid-video-renderer," +
+            "ytd-compact-video-renderer," +    // watch sidebar videos
+            "ytd-compact-playlist-renderer," +
+            "ytd-compact-radio-renderer," +
+            "ytd-show-renderer," +             // search show card
+            "ytd-radio-renderer," +            // search radio card
+            "ytd-video-renderer," +            // single video in home feed or search page
+            "ytd-channel-renderer," +          // search channel card
+            "ytd-playlist-renderer";           // search playlist
         blocked_channels = {};
         window.b = blocked_channels;
 
