@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.0.7
+// @version         0.0.8
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -20,21 +20,8 @@
 (function () {
     "use strict";
     function inject(is_userscript) {
-        function addToBlacklist(event) {
-            event.preventDefault();
-            document.body.appendChild(blacklist_button);
-            console.log(26, this.details);
-            blocked_channels[this.details.ucid] = this.details.brand;
-            blacklist();
-        }
-        function positionBlacklistButton(event) {
-            if (event.type === "mouseover" && !this.contains(blacklist_button)) {
-                blacklist_button.details = this.details;
-                this.appendChild(blacklist_button);
-            }
-        }
         function cleanEmptyContainers() {
-            var i, temp, child, parent, container;
+            var i, temp, container;
             container = document.querySelectorAll(
                 ".section-list > li," +
                 //".feed-item-container," +
@@ -57,9 +44,8 @@
             console.log(67, ignore.containers.length);
         }
         function getVideos(added_nodes) {
-            var i, temp, text, ucid, child, parent, videos, button, remove, details, up_next;
+            var i, temp, text, ucid, child, parent, videos, button, remove, up_next;
             remove = [];
-            details = {};
             up_next = document.querySelector(
                 ".autoplay-bar," +
                 "ytd-compact-autoplay-renderer" // material
@@ -82,25 +68,16 @@
                             ucid = temp.data.longBylineText || temp.data.shortBylineText;
                             ucid = ucid.runs[0];
                             text = ucid.text;
-                            if (!ucid.navigationEndpoint) {
-                                ucid = "YouTube";
-                                details[ucid] = ucid;
-                                console.info("YouTube", videos[i]);
-                            } else {
+                            if (ucid.navigationEndpoint) {
                                 ucid = ucid.navigationEndpoint.browseEndpoint.browseId;
-                                details[ucid] = text;
+                            } else {
+                                ucid = "YouTube";
                             }
                         } else if (temp.dataset && temp.dataset.ytid) {
                             ucid = temp.dataset.ytid;
-                            details[ucid] = temp.textContent;
                         }
-                    } else if (!temp) {
-                        // if no UCID  then channel is YouTube
-                        temp = videos[i].querySelector(".attribution");
-                        if (temp) {
-                            ucid = "YouTube";
-                            details[ucid] = ucid;
-                        }
+                    } else {
+                        ucid = "YouTube";
                     }
                     if (ucid) {
                         if (blocked_channels[ucid]) {
@@ -118,20 +95,6 @@
                                 remove.push(videos[i]);
                             }
                         } else {
-                            temp = videos[i].querySelector(
-                                ".yt-pl-thumb," +
-                                ".thumb-wrapper," +
-                                ".yt-lockup-thumbnail," +
-                                "#thumbnail" // material
-                            );
-                            if (temp) {
-                                temp.details = {
-                                    ucid: ucid,
-                                    brand: details[ucid]
-                                };
-                                temp.addEventListener("mouseover", positionBlacklistButton);
-                                temp.addEventListener("mouseleave", positionBlacklistButton);
-                            }
                             ignore.videos.push(videos[i]);
                         }
                     }
@@ -181,7 +144,8 @@
             console.log(200);
         }
         function blacklist(event, observer) {
-            var i, temp;
+            var i, temp, added;
+            console.log(event);
             if (!/^\/($|feed\/(?!subscriptions)|watch|results|shared)/.test(window.location.pathname)) {
                 return;
             }
@@ -194,27 +158,11 @@
                     hasContainers: /^\/($|feed\/)/.test(window.location.pathname)
                 };
             }
-            if (!blacklist_button) {
-                blacklist_button = document.createElement("div");
-                blacklist_button.title = "Add to blacklist";
-                blacklist_button.className = "bytc-add-to-blacklist";
-                blacklist_button.innerHTML = //
-                    "<svg class='bytc-add-to-blacklist-icon' viewBox='0 0 24 24'>" +
-                    "    <polygon points='24,2.1 21.9,0 12,9.9 2.1,0 0,2.1 9.9,12 0,21.9 2.1,24 12,14.1 21.9,24 24,21.9 14.1,12'/>" +
-                    "</svg>";
-                    /*"<svg class='bytc-add-to-blacklist-icon' viewBox='0 0 24 24'>" +
-                    "    <polygon points='24,1.4 22.6,0 12,10.6 1.4,0 0,1.4 10.6,12 0,22.6 1.4,24 12,13.4 22.6,24 24,22.6 13.4,12'/>" +
-                    "</svg>";*/
-                    /*"<svg class='bytc-add-to-blacklist-icon' viewBox='0 0 24 24'>" +
-                    "    <polygon points='24,2.8 21.2,0 12,9.2 2.8,0 0,2.8 9.2,12 0,21.2 2.8,24 12,14.8 21.2,24 24,21.2 14.8,12'/>" +
-                    "</svg>";*/
-                blacklist_button.addEventListener("click", addToBlacklist, true);
-                document.body.appendChild(blacklist_button);
-            }
             if (observer) {
                 i = event.length;
                 while (i--) {
                     if (event[i].addedNodes.length) {
+                        added = true;
                         temp = document.querySelectorAll(
                             "ytd-search:not([hidden]) #contents #contents.ytd-item-section-renderer > *," +  // search page
                             "ytd-browse:not([hidden]) #primary > #contents.ytd-section-list-renderer > *," + // home/subscriptions page
@@ -224,6 +172,9 @@
                         getVideos();
                         break;
                     }
+                }
+                if (!added) {
+                    return;
                 }
             } else {
                 console.log(245);
@@ -241,32 +192,94 @@
             }
         }
 
+        function addBL(event) {
+            var ucid, brand, parent;
+            if (event.target.tagName === "BYTV") {
+                parent = event.target.parentNode;
+                while (parent) {
+                    if (tag_list.indexOf(parent.tagName) > -1) {
+                        if (parent.data) {
+                            ucid = parent.data.longBylineText || parent.data.shortBylineText;
+                            ucid = ucid.runs[0];
+                            brand = ucid.text;
+                            if (ucid.navigationEndpoint) {
+                                ucid = ucid.navigationEndpoint.browseEndpoint.browseId;
+                            } else {
+                                ucid = "YouTube";
+                            }
+                        }
+                        break;
+                    }
+                    parent = parent.parentNode;
+                }
+                if (ucid && brand) {
+                    blocked_channels[ucid] = brand;
+                    blacklist();
+                }
+            }
+        }
+        function ini(event) {
+            var temp, node;
+            if (document.readyState !== "interactive") {
+                return;
+            }
+            node = document.createElement("bytv");
+            node.title = "Add to blacklist";
+            node.className = "bytc-add-to-blacklist";
+            node.innerHTML = //
+                "<svg viewBox='0 0 24 24'>" +
+                "    <polygon points='24,2.1 21.9,0 12,9.9 2.1,0 0,2.1 9.9,12 0,21.9 2.1,24 12,14.1 21.9,24 24,21.9 14.1,12'/>" +
+                "</svg>";
+                /*"<svg class='bytc-add-to-blacklist-icon' viewBox='0 0 24 24'>" +
+                "    <polygon points='24,1.4 22.6,0 12,10.6 1.4,0 0,1.4 10.6,12 0,22.6 1.4,24 12,13.4 22.6,24 24,22.6 13.4,12'/>" +
+                "</svg>";*/
+                /*"<svg class='bytc-add-to-blacklist-icon' viewBox='0 0 24 24'>" +
+                "    <polygon points='24,2.8 21.2,0 12,9.2 2.8,0 0,2.8 9.2,12 0,21.2 2.8,24 12,14.8 21.2,24 24,21.2 14.8,12'/>" +
+                "</svg>";*/
+            temp = document.querySelector("#ytd-thumbnail template");
+            if (temp && temp.content) {
+                temp.content.appendChild(node.cloneNode(true));
+            }
+            blacklist(event);
+        }
 
-        var ignore, globals, video_nodes, blocked_channels, blacklist_button;
 
-        video_nodes = //
-            // main, trending, subscription, search
-            ".yt-lockup-video," +
-            ".yt-lockup-channel," +
-            ".yt-lockup-playlist," +
-            // related
-            ".related-list-item," +
-            // material
-            "ytd-grid-video-renderer," +
-            "ytd-compact-video-renderer," +    // watch sidebar videos
-            "ytd-compact-playlist-renderer," +
-            "ytd-compact-radio-renderer," +
-            "ytd-show-renderer," +             // search show card
-            "ytd-radio-renderer," +            // search radio card
-            "ytd-video-renderer," +            // single video in home feed or search page
-            "ytd-channel-renderer," +          // search channel card
-            "ytd-playlist-renderer";           // search playlist
+        var ignore, globals, tag_list, video_nodes, blocked_channels;
+
+        tag_list = [
+            "YTD-COMPACT-LINK-RENDERER",
+            "YTD-COMPACT-PLAYLIST-RENDERER",
+            "YTD-COMPACT-PROMOTED-VIDEO-RENDERER",
+            "YTD-COMPACT-RADIO-RENDERER",
+            "YTD-COMPACT-VIDEO-RENDERER",
+            "YTD-GRID-CHANNEL-RENDERER",
+            "YTD-GRID-MOVIE-PLAYLIST-RENDERER",
+            "YTD-GRID-MOVIE-RENDERER",
+            "YTD-GRID-PLAYLIST-RENDERER",
+            "YTD-GRID-RADIO-RENDERER",
+            "YTD-GRID-RENDERER",
+            "YTD-GRID-SHOW-RENDERER",
+            "YTD-GRID-VIDEO-RENDERER",
+            "YTD-CHANNEL-RENDERER",
+            "YTD-MOVIE-RENDERER",
+            "YTD-PLAYLIST-RENDERER",
+            "YTD-RADIO-RENDERER",
+            "YTD-SHOW-RENDERER",
+            "YTD-VIDEO-RENDERER"
+        ];
+
+        video_nodes = tag_list.join(",");
+
         blocked_channels = {};
         window.b = blocked_channels;
 
-        document.addEventListener("readystatechange", blacklist);
+        document.addEventListener("readystatechange", ini);
+        document.addEventListener("click", addBL);
+        //document.addEventListener("readystatechange", blacklist);
         document.addEventListener("spfdone", blacklist);
-        document.addEventListener("yt-navigate-finish", blacklist); // material
+        //yt-visibility-updated
+        //document.addEventListener("yt-navigate-finish", blacklist); // material
+        document.addEventListener("yt-page-data-fetched", blacklist); // material
     }
     function contentScriptMessages() {
         var key1, key2, gate, sets, locs, observer;
@@ -318,42 +331,34 @@
             }*/
             holder = document.createElement("style");
             holder.textContent = //
-                `.bytc-add-to-blacklist {
-                    background-color: #000;
-                    color: #fff;
-                    top: 0;
-                    left: 0;
-                    height: 0;
-                    width: 0;
-                    cursor: pointer;
-                    padding: 14px;
-                    opacity: 0;
-                    border-radius: 2px;
-                    margin: 4px;
-                    position: absolute;
-                    transition: opacity 0.3s;
-                    z-index: 1;
-                }
-                body > .bytc-add-to-blacklist {
-                    top: -100px;
-                    left: -100px;
-                }
-                a:hover > .bytc-add-to-blacklist,
-                div:hover > .bytc-add-to-blacklist {
-                    opacity: .8;
-                }
-                .bytc-add-to-blacklist-icon {
-                    fill:#fff;
-                    width:16px;
-                    pointer-events: none;
-                    transform: translate(-50%, -50%);
-                }
-                .blocked {
-                    display: none !important;
-                }
-                ytd-channel-renderer #thumbnail { /* fix blacklist not posotioned inside thumb */
-                    position: relative;
-                }`;
+`.bytc-add-to-blacklist {
+    background-color: #000;
+    border-radius: 2px;
+    color: #fff;
+    cursor: pointer;
+    height: 0;
+    left: 0;
+    margin: 4px;
+    opacity: 0;
+    padding: 14px;
+    position: absolute;
+    top: 0;
+    transition: opacity .3s;
+    width: 0;
+    z-index: 1;
+}
+.ytd-thumbnail-0:not(:hover) .bytc-add-to-blacklist {
+    user-select: none;
+}
+.ytd-thumbnail-0:hover .bytc-add-to-blacklist {
+    opacity: .8;
+}
+.bytc-add-to-blacklist svg {
+    fill: #fff;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    width: 16px;
+}`;
             document.documentElement.appendChild(holder);
             holder = document.createElement("script");
             holder.textContent = "(" + inject + "(" + ebony.is_userscript + "))";
