@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.0.8
+// @version         0.0.9
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -20,30 +20,44 @@
 (function () {
     "use strict";
     function inject(is_userscript) {
-        function cleanEmptyContainers() {
+        function getEmptyContainers() {
             var i, temp, container;
-            container = document.querySelectorAll(
-                ".section-list > li," +
-                //".feed-item-container," +
-                "#contents ytd-item-section-renderer" // material
-            );
-            i = container.length;
-            while (i--) {
+            container = document.querySelectorAll(container_nodes);
+            for (i = 0; i < container.length; i++) {
                 if (ignore.containers.indexOf(container[i]) < 0) {
+                    shelf = container[i].querySelector("yt-horizontal-list-renderer");
+                    if (shelf.hasAttribute("at-start") || shelf.hasAttribute("at-end")) {
+                        shelf.fillRemainingListItems();
+                    }
                     temp = container[i].querySelector(video_nodes);
                     if (!temp) {
                         container[i].outerHTML = "";
-                        break;
                     } else {
                         ignore.containers.push(container[i]);
                     }
                 }
             }
-            console.info("resize");
             window.dispatchEvent(new Event("resize"));
-            console.log(67, ignore.containers.length);
+            console.log("getEmptyContainers");
         }
-        function getVideos(added_nodes) {
+        function getContainers() {
+            var i, temp, ucid, container;
+            container = document.querySelectorAll(container_nodes);
+            for (i = 0; i < container.length; i++) {
+                temp = container[i].data;
+                temp = temp && temp.contents[0];
+                temp = temp && temp.shelfRenderer;
+                if (temp) {
+                    ucid = temp.endpoint.browseEndpoint.browseId;
+                    if (blocked_channels[ucid]) {
+                        console.log(ucid);
+                        container[i].outerHTML = "";
+                    }
+                }
+            }
+            console.log("getContainers");
+        }
+        function getVideos() {
             var i, temp, text, ucid, child, parent, videos, button, remove, up_next;
             remove = [];
             up_next = document.querySelector(
@@ -51,8 +65,7 @@
                 "ytd-compact-autoplay-renderer" // material
             );
             videos = document.querySelectorAll(video_nodes);
-            i = videos.length;
-            while (i--) {
+            for (i = 0; i < videos.length; i++) {
                 if (ignore.videos.indexOf(videos[i]) < 0) {
                     if (videos[i].data) { // material
                         temp = videos[i];
@@ -62,7 +75,6 @@
                             ".yt-lockup-content [data-ytid]"
                         );
                     }
-                    // console.log(85, temp);
                     if (temp) {
                         if (temp.data) {
                             ucid = temp.data.longBylineText || temp.data.shortBylineText;
@@ -100,14 +112,12 @@
                     }
                 }
             }
-            i = remove.length;
-            if (i) {
-                while (i--) {
+            if (remove.length) {
+                for (i = 0; i < remove.length; i++) {
                     child = remove[i];
-                    while (child) {
+                    for (;child;) {
                         parent = child.parentNode;
                         if (parent.childElementCount > 1 || parent.id === "contents" || parent.id === "items") {
-                            //console.log(blocked_channels[ucid]);
                             child.outerHTML = "";
                             break;
                         }
@@ -117,35 +127,34 @@
                 if (globals.hasContainers) {
                     ignore.containers = [];
                 } else {
-                    console.info("resize");
                     window.dispatchEvent(new Event("resize"));
                 }
             }
-            //console.log(153, details, ignore.videos.length);
+            console.log("getVideos");
         }
-        function loadMore(mutation) {
-            /*var observer, load_more_button;
-            load_more_button = document.querySelector(
+        function newNodes(mutation) {
+            /*var observer, section;
+            section = document.querySelector(
                 "#watch-more-related," +      // related sidebar
                 "#browse-items-primary," +    // subscriptions page
                 "#feed-main-what_to_watch," + // home or trending page
                 "#content"                    // material home || #continuations loading icon
             );*/
-            var load_more_button = document.querySelector(
+            var section = document.querySelector(
                 "ytd-search:not([hidden]) #contents #contents.ytd-item-section-renderer," +  // search page
                 "ytd-browse:not([hidden]) #primary > #contents.ytd-section-list-renderer," + // home/subscriptions page
                 "ytd-watch:not([hidden]) #items.ytd-watch-next-secondary-results-renderer"   // watch page
             );
-            if (load_more_button && (!loadMore.button || !loadMore.button.contains(load_more_button))) {
-                loadMore.button = load_more_button;
-                loadMore.observer = new MutationObserver(blacklist);
-                loadMore.observer.observe(load_more_button, {childList: true});
+            if (section && (!newNodes.section || !newNodes.section.contains(section))) {
+                newNodes.section = section;
+                newNodes.observer = new MutationObserver(blacklist);
+                newNodes.observer.observe(section, {childList: true});
             }
-            console.log(200);
+            console.log("newNodes");
         }
         function blacklist(event, observer) {
-            var i, temp, added;
-            console.log(event);
+            var i;
+            console.log(event && event.type);
             if (!/^\/($|feed\/(?!subscriptions)|watch|results|shared)/.test(window.location.pathname)) {
                 return;
             }
@@ -157,46 +166,30 @@
                 globals = {
                     hasContainers: /^\/($|feed\/)/.test(window.location.pathname)
                 };
-            }
-            if (observer) {
-                i = event.length;
-                while (i--) {
-                    if (event[i].addedNodes.length) {
-                        added = true;
-                        temp = document.querySelectorAll(
-                            "ytd-search:not([hidden]) #contents #contents.ytd-item-section-renderer > *," +  // search page
-                            "ytd-browse:not([hidden]) #primary > #contents.ytd-section-list-renderer > *," + // home/subscriptions page
-                            "ytd-watch:not([hidden]) #items.ytd-watch-next-secondary-results-renderer > *"   // watch page
-                        ).length;
-                        console.log("count: " + temp);
-                        getVideos();
-                        break;
-                    }
-                }
-                if (!added) {
-                    return;
-                }
-            } else {
-                console.log(245);
-                getVideos();
-                if (event && !observer) {
-                    if (loadMore.observer) {
-                        loadMore.button = false;
-                        loadMore.observer.disconnect();
-                    }
-                    loadMore();
-                }
+                window.c = ignore;
             }
             if (globals.hasContainers) {
-                cleanEmptyContainers();
+                getContainers();
             }
+            getVideos();
+            if (event && !observer) {
+                if (newNodes.observer) {
+                    newNodes.section = false;
+                    newNodes.observer.disconnect();
+                }
+                newNodes();
+            }
+            if (globals.hasContainers) {
+                getEmptyContainers();
+            }
+            console.log("blacklist");
         }
 
-        function addBL(event) {
+        function addToBlacklist(event) {
             var ucid, brand, parent;
             if (event.target.tagName === "BYTV") {
                 parent = event.target.parentNode;
-                while (parent) {
+                for (;parent;) {
                     if (tag_list.indexOf(parent.tagName) > -1) {
                         if (parent.data) {
                             ucid = parent.data.longBylineText || parent.data.shortBylineText;
@@ -217,6 +210,7 @@
                     blacklist();
                 }
             }
+            console.log("addToBlacklist");
         }
         function ini(event) {
             var temp, node;
@@ -230,12 +224,6 @@
                 "<svg viewBox='0 0 24 24'>" +
                 "    <polygon points='24,2.1 21.9,0 12,9.9 2.1,0 0,2.1 9.9,12 0,21.9 2.1,24 12,14.1 21.9,24 24,21.9 14.1,12'/>" +
                 "</svg>";
-                /*"<svg class='bytc-add-to-blacklist-icon' viewBox='0 0 24 24'>" +
-                "    <polygon points='24,1.4 22.6,0 12,10.6 1.4,0 0,1.4 10.6,12 0,22.6 1.4,24 12,13.4 22.6,24 24,22.6 13.4,12'/>" +
-                "</svg>";*/
-                /*"<svg class='bytc-add-to-blacklist-icon' viewBox='0 0 24 24'>" +
-                "    <polygon points='24,2.8 21.2,0 12,9.2 2.8,0 0,2.8 9.2,12 0,21.2 2.8,24 12,14.8 21.2,24 24,21.2 14.8,12'/>" +
-                "</svg>";*/
             temp = document.querySelector("#ytd-thumbnail template");
             if (temp && temp.content) {
                 temp.content.appendChild(node.cloneNode(true));
@@ -243,8 +231,7 @@
             blacklist(event);
         }
 
-
-        var ignore, globals, tag_list, video_nodes, blocked_channels;
+        var ignore, globals, tag_list, video_nodes, container_nodes, blocked_channels;
 
         tag_list = [
             "YTD-COMPACT-LINK-RENDERER",
@@ -270,16 +257,18 @@
 
         video_nodes = tag_list.join(",");
 
+        container_nodes = "#contents ytd-item-section-renderer"; // material
+
         blocked_channels = {};
         window.b = blocked_channels;
 
         document.addEventListener("readystatechange", ini);
-        document.addEventListener("click", addBL);
+        document.addEventListener("click", addToBlacklist);
         //document.addEventListener("readystatechange", blacklist);
         document.addEventListener("spfdone", blacklist);
         //yt-visibility-updated
-        //document.addEventListener("yt-navigate-finish", blacklist); // material
-        document.addEventListener("yt-page-data-fetched", blacklist); // material
+        document.addEventListener("yt-navigate-finish", blacklist); // material
+        //document.addEventListener("yt-page-data-fetched", blacklist); // material
     }
     function contentScriptMessages() {
         var key1, key2, gate, sets, locs, observer;
