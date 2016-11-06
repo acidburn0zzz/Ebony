@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.0.9
+// @version         0.1.0
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -20,13 +20,75 @@
 (function () {
     "use strict";
     function inject(is_userscript) {
+
+        function iterator(obj, stack) {
+            var i, temp, property;
+            if (obj.constructor === Array) {
+                for (i = 0; i < obj.length; i++) {
+                    if (typeof obj[i] == "object") {
+                        if (obj[i].itemSectionRenderer) {
+                            temp = obj[i].itemSectionRenderer && obj[i].itemSectionRenderer.contents && obj[i].itemSectionRenderer.contents[0].shelfRenderer && obj[i].itemSectionRenderer.contents[0].shelfRenderer.endpoint;
+                            if (temp && blocked_channels[temp.browseEndpoint.browseId]) {
+                                obj.splice(i--, 1);
+                            } else {
+                                iterator(obj[i], stack + '[' + i + ']');
+                                if (empty === 0) {
+                                    obj.splice(i--, 1);
+                                }
+                                empty = null;
+                            }
+                        } else if (obj[i].gridVideoRenderer) {
+                            temp = obj[i].gridVideoRenderer.shortBylineText || obj[i].gridVideoRenderer.longBylineText;
+                            temp = temp.runs[0].navigationEndpoint;
+                            if (temp && blocked_channels[temp.browseEndpoint.browseId]) {
+                                obj.splice(i--, 1);
+                                empty = obj.length;
+                            } else {
+                                iterator(obj[i], stack + '[' + i + ']');
+                            }
+                        } else if (obj[i].videoRenderer) {
+                            temp = obj[i].videoRenderer.shortBylineText || obj[i].videoRenderer.longBylineText;
+                            temp = temp.runs[0].navigationEndpoint;
+                            if (temp && blocked_channels[temp.browseEndpoint.browseId]) {
+                                obj.splice(i--, 1);
+                                empty = obj.length;
+                            } else {
+                                iterator(obj[i], stack + '[' + i + ']');
+                            }
+                        } else {
+                            iterator(obj[i], stack + '[' + i + ']');
+                        }
+                    }
+                }
+            } else {
+                for (property in obj) {
+                    if (obj.hasOwnProperty(property)) {
+                        if (typeof obj[property] == "object") {
+                            iterator(obj[property], stack + '.' + property);
+                        }
+                    }
+                }
+            }
+        }
+        function checkParse(orig) {
+            return function() {
+                var temp = orig.apply(this, arguments);
+                //console.log(this, arguments);
+                //console.log(temp);
+                if (temp.response) {
+                    iterator(temp.response, "response");
+                }
+                return temp;
+            };
+        }
+
         function getEmptyContainers() {
             var i, temp, container;
             container = document.querySelectorAll(container_nodes);
             for (i = 0; i < container.length; i++) {
                 if (ignore.containers.indexOf(container[i]) < 0) {
                     shelf = container[i].querySelector("yt-horizontal-list-renderer");
-                    if (shelf.hasAttribute("at-start") || shelf.hasAttribute("at-end")) {
+                    if (shelf && (shelf.hasAttribute("at-start") || shelf.hasAttribute("at-end"))) {
                         shelf.fillRemainingListItems();
                     }
                     temp = container[i].querySelector(video_nodes);
@@ -43,6 +105,7 @@
         function getContainers() {
             var i, temp, ucid, container;
             container = document.querySelectorAll(container_nodes);
+            //console.info(container);
             for (i = 0; i < container.length; i++) {
                 temp = container[i].data;
                 temp = temp && temp.contents[0];
@@ -50,21 +113,21 @@
                 if (temp) {
                     ucid = temp.endpoint.browseEndpoint.browseId;
                     if (blocked_channels[ucid]) {
-                        console.log(ucid);
+                        //console.log(ucid);
                         container[i].outerHTML = "";
                     }
                 }
             }
             console.log("getContainers");
         }
-        function getVideos() {
+        function getVideos(nodes) {
             var i, temp, text, ucid, child, parent, videos, button, remove, up_next;
             remove = [];
             up_next = document.querySelector(
                 ".autoplay-bar," +
                 "ytd-compact-autoplay-renderer" // material
             );
-            videos = document.querySelectorAll(video_nodes);
+            videos = nodes || document.querySelectorAll(video_nodes);
             for (i = 0; i < videos.length; i++) {
                 if (ignore.videos.indexOf(videos[i]) < 0) {
                     if (videos[i].data) { // material
@@ -113,6 +176,7 @@
                 }
             }
             if (remove.length) {
+                //console.info(remove);
                 for (i = 0; i < remove.length; i++) {
                     child = remove[i];
                     for (;child;) {
@@ -154,7 +218,7 @@
         }
         function blacklist(event, observer) {
             var i;
-            console.log(event && event.type);
+            //console.log(event && event.type);
             if (!/^\/($|feed\/(?!subscriptions)|watch|results|shared)/.test(window.location.pathname)) {
                 return;
             }
@@ -171,13 +235,23 @@
             if (globals.hasContainers) {
                 getContainers();
             }
-            getVideos();
-            if (event && !observer) {
-                if (newNodes.observer) {
-                    newNodes.section = false;
-                    newNodes.observer.disconnect();
+            if (observer) {
+                //console.info(event);
+                for (i = 0; i < event.length; i++) {
+                    if (event[i].addedNodes.length) {
+                        getVideos();
+                        break;
+                    }
                 }
-                newNodes();
+            } else {
+                getVideos();
+                if (event && !observer) {
+                    if (newNodes.observer) {
+                        newNodes.section = false;
+                        newNodes.observer.disconnect();
+                    }
+                    newNodes();
+                }
             }
             if (globals.hasContainers) {
                 getEmptyContainers();
@@ -228,10 +302,11 @@
             if (temp && temp.content) {
                 temp.content.appendChild(node.cloneNode(true));
             }
-            blacklist(event);
+            //blacklist(event);
+            iterator(window.ytInitialData, "ytInitialData");
         }
 
-        var ignore, globals, tag_list, video_nodes, container_nodes, blocked_channels;
+        var empty, ignore, globals, tag_list, video_nodes, container_nodes, blocked_channels;
 
         tag_list = [
             "YTD-COMPACT-LINK-RENDERER",
@@ -262,13 +337,16 @@
         blocked_channels = {};
         window.b = blocked_channels;
 
-        document.addEventListener("readystatechange", ini);
+        JSON.parse = checkParse(JSON.parse);
+
         document.addEventListener("click", addToBlacklist);
+        document.addEventListener("readystatechange", ini);
         //document.addEventListener("readystatechange", blacklist);
-        document.addEventListener("spfdone", blacklist);
+        //document.addEventListener("spfdone", blacklist);
         //yt-visibility-updated
-        document.addEventListener("yt-navigate-finish", blacklist); // material
+        //document.addEventListener("yt-navigate-finish", blacklist); // material
         //document.addEventListener("yt-page-data-fetched", blacklist); // material
+
     }
     function contentScriptMessages() {
         var key1, key2, gate, sets, locs, observer;
