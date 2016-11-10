@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.1.0
+// @version         0.1.1
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -22,7 +22,21 @@
     function inject(is_userscript) {
 
         function iterator(obj, stack) {
-            var i, temp, property;
+            var i, j, temp, tags, property;
+            tags = [
+                "channelRenderer",
+                "playlistRenderer",
+                "radioRenderer",
+                "showRenderer",
+                "videoRenderer",
+                "gridChannelRenderer",
+                "gridMoviePlaylistRenderer",
+                "gridMovieRenderer",
+                "gridPlaylistRenderer",
+                "gridRadioRenderer",
+                "gridShowRenderer",
+                "gridVideoRenderer"
+            ];
             if (obj.constructor === Array) {
                 for (i = 0; i < obj.length; i++) {
                     if (typeof obj[i] == "object") {
@@ -32,31 +46,28 @@
                                 obj.splice(i--, 1);
                             } else {
                                 iterator(obj[i], stack + '[' + i + ']');
-                                if (empty === 0) {
+                                //if (window.location.pathname === "/" && empty === 0) {
+                                if (!obj[i].itemSectionRenderer.continuations && empty === 0) {
                                     obj.splice(i--, 1);
                                 }
                                 empty = null;
                             }
-                        } else if (obj[i].gridVideoRenderer) {
-                            temp = obj[i].gridVideoRenderer.shortBylineText || obj[i].gridVideoRenderer.longBylineText;
-                            temp = temp.runs[0].navigationEndpoint;
-                            if (temp && blocked_channels[temp.browseEndpoint.browseId]) {
-                                obj.splice(i--, 1);
-                                empty = obj.length;
-                            } else {
-                                iterator(obj[i], stack + '[' + i + ']');
-                            }
-                        } else if (obj[i].videoRenderer) {
-                            temp = obj[i].videoRenderer.shortBylineText || obj[i].videoRenderer.longBylineText;
-                            temp = temp.runs[0].navigationEndpoint;
-                            if (temp && blocked_channels[temp.browseEndpoint.browseId]) {
-                                obj.splice(i--, 1);
-                                empty = obj.length;
-                            } else {
-                                iterator(obj[i], stack + '[' + i + ']');
-                            }
                         } else {
-                            iterator(obj[i], stack + '[' + i + ']');
+                            for (j = 0; j < tags.length; j++) {
+                                if (obj[i][tags[j]]) {
+                                    temp = obj[i][tags[j]].shortBylineText || obj[i][tags[j]].longBylineText;
+                                    temp = temp && temp.runs && temp.runs[0];
+                                    temp = temp && (temp.navigationEndpoint && temp.navigationEndpoint.browseEndpoint && temp.navigationEndpoint.browseEndpoint.browseId || temp.text);
+                                    console.log(temp);
+                                    if (temp && blocked_channels[temp]) {
+                                        obj.splice(i--, 1);
+                                        empty = obj.length;
+                                    } else {
+                                        iterator(obj[i], stack + '[' + i + ']');
+                                    }
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -141,12 +152,14 @@
                     if (temp) {
                         if (temp.data) {
                             ucid = temp.data.longBylineText || temp.data.shortBylineText;
-                            ucid = ucid.runs[0];
-                            text = ucid.text;
-                            if (ucid.navigationEndpoint) {
-                                ucid = ucid.navigationEndpoint.browseEndpoint.browseId;
-                            } else {
-                                ucid = "YouTube";
+                            ucid = ucid && ucid.runs[0];
+                            text = ucid && ucid.text;
+                            if (ucid) {
+                                if (ucid.navigationEndpoint) {
+                                    ucid = ucid.navigationEndpoint.browseEndpoint.browseId;
+                                } else {
+                                    ucid = "YouTube";
+                                }
                             }
                         } else if (temp.dataset && temp.dataset.ytid) {
                             ucid = temp.dataset.ytid;
@@ -196,26 +209,6 @@
             }
             console.log("getVideos");
         }
-        function newNodes(mutation) {
-            /*var observer, section;
-            section = document.querySelector(
-                "#watch-more-related," +      // related sidebar
-                "#browse-items-primary," +    // subscriptions page
-                "#feed-main-what_to_watch," + // home or trending page
-                "#content"                    // material home || #continuations loading icon
-            );*/
-            var section = document.querySelector(
-                "ytd-search:not([hidden]) #contents #contents.ytd-item-section-renderer," +  // search page
-                "ytd-browse:not([hidden]) #primary > #contents.ytd-section-list-renderer," + // home/subscriptions page
-                "ytd-watch:not([hidden]) #items.ytd-watch-next-secondary-results-renderer"   // watch page
-            );
-            if (section && (!newNodes.section || !newNodes.section.contains(section))) {
-                newNodes.section = section;
-                newNodes.observer = new MutationObserver(blacklist);
-                newNodes.observer.observe(section, {childList: true});
-            }
-            console.log("newNodes");
-        }
         function blacklist(event, observer) {
             var i;
             //console.log(event && event.type);
@@ -228,31 +221,14 @@
                     containers: []
                 };
                 globals = {
-                    hasContainers: /^\/($|feed\/)/.test(window.location.pathname)
+                    hasContainers: window.location.pathname === "/"
                 };
                 window.c = ignore;
             }
             if (globals.hasContainers) {
                 getContainers();
             }
-            if (observer) {
-                //console.info(event);
-                for (i = 0; i < event.length; i++) {
-                    if (event[i].addedNodes.length) {
-                        getVideos();
-                        break;
-                    }
-                }
-            } else {
-                getVideos();
-                if (event && !observer) {
-                    if (newNodes.observer) {
-                        newNodes.section = false;
-                        newNodes.observer.disconnect();
-                    }
-                    newNodes();
-                }
-            }
+            getVideos();
             if (globals.hasContainers) {
                 getEmptyContainers();
             }
@@ -262,6 +238,7 @@
         function addToBlacklist(event) {
             var ucid, brand, parent;
             if (event.target.tagName === "BYTV") {
+                event.preventDefault();
                 parent = event.target.parentNode;
                 for (;parent;) {
                     if (tag_list.indexOf(parent.tagName) > -1) {
@@ -287,7 +264,7 @@
             console.log("addToBlacklist");
         }
         function ini(event) {
-            var temp, node;
+            var i, j, temp, node;
             if (document.readyState !== "interactive") {
                 return;
             }
@@ -298,10 +275,24 @@
                 "<svg viewBox='0 0 24 24'>" +
                 "    <polygon points='24,2.1 21.9,0 12,9.9 2.1,0 0,2.1 9.9,12 0,21.9 2.1,24 12,14.1 21.9,24 24,21.9 14.1,12'/>" +
                 "</svg>";
-            temp = document.querySelector("#ytd-thumbnail template");
-            if (temp && temp.content) {
-                temp.content.appendChild(node.cloneNode(true));
+            temp = document.querySelectorAll(
+                "#ytd-thumbnail template," +
+                "#ytd-channel-renderer template," +
+                "#ytd-playlist-thumbnail template"
+            );
+            i = temp.length;
+            while (i--) {
+                j = temp[i].content.querySelector(
+                    "#avatar," +
+                    "#thumbnail"
+                );
+                if (j) {
+                    j.appendChild(node.cloneNode(true));
+                }
             }
+            /*if (temp && temp.content) {
+                temp.content.appendChild(node.cloneNode(true));
+            }*/
             //blacklist(event);
             iterator(window.ytInitialData, "ytInitialData");
         }
@@ -339,7 +330,7 @@
 
         JSON.parse = checkParse(JSON.parse);
 
-        document.addEventListener("click", addToBlacklist);
+        document.addEventListener("click", addToBlacklist, true);
         document.addEventListener("readystatechange", ini);
         //document.addEventListener("readystatechange", blacklist);
         //document.addEventListener("spfdone", blacklist);
@@ -414,10 +405,14 @@
     width: 0;
     z-index: 1;
 }
-.ytd-thumbnail-0:not(:hover) .bytc-add-to-blacklist {
+#avatar:not(:hover) .bytc-add-to-blacklist,
+.ytd-thumbnail-0:not(:hover) .bytc-add-to-blacklist,
+.ytd-playlist-thumbnail-0:not(:hover) .bytc-add-to-blacklist {
     user-select: none;
 }
-.ytd-thumbnail-0:hover .bytc-add-to-blacklist {
+#avatar:hover .bytc-add-to-blacklist,
+.ytd-thumbnail-0:hover .bytc-add-to-blacklist,
+.ytd-playlist-thumbnail-0:hover .bytc-add-to-blacklist {
     opacity: .8;
 }
 .bytc-add-to-blacklist svg {
@@ -425,6 +420,12 @@
     pointer-events: none;
     transform: translate(-50%, -50%);
     width: 16px;
+}
+#avatar {
+    position: relative;
+}
+#avatar .bytc-add-to-blacklist {
+    top: 32px
 }`;
             document.documentElement.appendChild(holder);
             holder = document.createElement("script");
