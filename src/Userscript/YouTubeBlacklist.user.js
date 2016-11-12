@@ -1,5 +1,5 @@
 // ==UserScript==
-// @version         0.1.1
+// @version         0.1.2
 // @name            Block YouTube Videos
 // @namespace       https://github.com/ParticleCore
 // @description     YouTube less annoying
@@ -22,7 +22,7 @@
     function inject(is_userscript) {
 
         function iterator(obj, stack) {
-            var i, j, temp, tags, property;
+            var i, j, temp, tags, found, property;
             tags = [
                 "channelRenderer",
                 "playlistRenderer",
@@ -58,15 +58,20 @@
                                     temp = obj[i][tags[j]].shortBylineText || obj[i][tags[j]].longBylineText;
                                     temp = temp && temp.runs && temp.runs[0];
                                     temp = temp && (temp.navigationEndpoint && temp.navigationEndpoint.browseEndpoint && temp.navigationEndpoint.browseEndpoint.browseId || temp.text);
-                                    console.log(temp);
+                                    //console.log(temp);
                                     if (temp && blocked_channels[temp]) {
                                         obj.splice(i--, 1);
                                         empty = obj.length;
                                     } else {
                                         iterator(obj[i], stack + '[' + i + ']');
                                     }
+                                    found = true;
                                     break;
                                 }
+                            }
+                            if (!found) {
+                                found = false;
+                                iterator(obj[i], stack + '[' + i + ']');
                             }
                         }
                     }
